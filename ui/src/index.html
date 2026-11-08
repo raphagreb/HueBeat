@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HueBeat</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <div class="backdrop">
+        <div class="backdrop-img" id="backdrop-img"></div>
+        <div class="backdrop-tint"></div>
+        <div class="backdrop-glow" id="backdrop-glow"></div>
+      </div>
+      <div class="grain"></div>
+
+      <header class="titlebar" data-tauri-drag-region>
+        <div class="brand" data-tauri-drag-region>
+          <img class="logo" src="assets/icon.png" alt="" draggable="false" />
+          <span class="brand-name" data-tauri-drag-region>HueBeat</span>
+          <span class="brand-ver">2.0</span>
+        </div>
+
+        <div class="titlebar-center" data-tauri-drag-region>
+          <span class="pill" id="pill-arduino"><i></i><span id="pill-arduino-text">Arduino</span></span>
+          <span class="pill" id="pill-openrgb"><i></i><span>OpenRGB</span></span>
+        </div>
+
+        <div class="win-buttons">
+          <button class="win-btn" id="btn-settings" title="Settings (Ctrl+S)" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3.2" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7h.08A1.7 1.7 0 0 0 10.1 3.14V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.1 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v.08a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+            </svg>
+          </button>
+          <button class="win-btn" id="btn-min" title="Minimize" aria-label="Minimize">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14" /></svg>
+          </button>
+          <button class="win-btn danger" id="btn-close" title="Hide to tray" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="stage">
+        <section class="cover-col">
+          <div class="cover-shell" id="cover-shell">
+            <div class="cover-glow" id="cover-glow"></div>
+            <div class="cover" id="cover">
+              <img id="cover-img" alt="" draggable="false" />
+              <div class="cover-empty" id="cover-empty">
+                <img src="assets/icon.png" alt="" />
+                <span>No cover</span>
+              </div>
+              <div class="cover-sheen"></div>
+            </div>
+            <div class="beat-ring" id="beat-ring"></div>
+          </div>
+
+          <div class="track-info">
+            <div class="eyebrow">
+              <span class="dot" id="state-dot"></span>
+              <span id="state-label">Paused</span>
+              <span class="eyebrow-sep">/</span>
+              <span id="port-label">no device</span>
+            </div>
+            <h1 class="title" id="title">Nothing playing</h1>
+            <p class="artist" id="artist">Play something in your media app</p>
+          </div>
+        </section>
+
+        <section class="panel-col">
+          <div class="card progress-card">
+            <div class="progress-head">
+              <span class="time" id="pos">0:00</span>
+              <span class="progress-track-label">TRACK</span>
+              <span class="time" id="dur">0:00</span>
+            </div>
+            <div class="progress" id="progress">
+              <div class="progress-track">
+                <div class="progress-fill" id="progress-fill"></div>
+                <div class="progress-thumb" id="progress-thumb"></div>
+              </div>
+            </div>
+
+            <div class="controls">
+              <button class="ctrl ghost" id="btn-prev" title="Previous (Ctrl+Alt+Left)" aria-label="Previous">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5a1 1 0 0 1 2 0v14a1 1 0 1 1-2 0V5Zm12.4 1.2a1 1 0 0 0-1.02-.1l-9 5a1 1 0 0 0 0 1.76l9 5A1 1 0 0 0 19 17V6.9c0-.28-.11-.54-.3-.7l-.3-.1Z" /></svg>
+              </button>
+              <button class="ctrl play" id="btn-play" title="Play / pause (Ctrl+Alt+Space)" aria-label="Play or pause">
+                <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.4a1 1 0 0 1 1.52-.85l10.2 6.45a1 1 0 0 1 0 1.7L9.72 19.15A1 1 0 0 1 8.2 18.3V5.4Z" /></svg>
+                <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1.4" /><rect x="13.5" y="5" width="4" height="14" rx="1.4" /></svg>
+              </button>
+              <button class="ctrl ghost" id="btn-next" title="Next (Ctrl+Alt+Right)" aria-label="Next">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 5a1 1 0 0 0-2 0v14a1 1 0 1 0 2 0V5Zm-12.4 1.2a1 1 0 0 1 1.02-.1l9 5a1 1 0 0 1 0 1.76l-9 5A1 1 0 0 1 5 17V6.9c0-.28.11-.54.3-.7l.3-.1Z" /></svg>
+              </button>
+
+              <div class="ctrl-spacer"></div>
+
+              <button class="beat-btn" id="btn-beat" title="Toggle beat (Ctrl+Alt+B)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12h4l2.5-7 4 14 2.5-7h7" />
+                </svg>
+                <span>Beat</span>
+                <span class="beat-state" id="beat-state">ON</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="card eq-card">
+            <div class="eq-head">
+              <span class="section-title">Live spectrum</span>
+              <span class="eq-badge" id="eq-badge">64 bands</span>
+            </div>
+            <canvas id="spectrum"></canvas>
+          </div>
+
+          <div class="status-row">
+            <div class="stat">
+              <span class="stat-label">Arduino</span>
+              <span class="stat-value" id="stat-arduino">Disconnected</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">OpenRGB</span>
+              <span class="stat-value" id="stat-openrgb">Off</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Beat engine</span>
+              <span class="stat-value" id="stat-beat">Ready</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- ------------------------- settings ------------------------- -->
+      <div class="modal hidden" id="settings">
+        <div class="modal-scrim" id="settings-scrim"></div>
+        <div class="settings-card">
+          <div class="settings-head">
+            <div>
+              <h2>Settings</h2>
+              <p>Changes are applied when you press Save.</p>
+            </div>
+            <button class="win-btn" id="settings-close" aria-label="Close settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+
+          <div class="settings-body" id="settings-body">
+            <div class="settings-col">
+              <section class="settings-section">
+                <h3>Connection</h3>
+
+                <label class="field">
+                  <span>Arduino port</span>
+                  <select id="cfg-port"></select>
+                </label>
+
+                <label class="field">
+                  <span>Audio output</span>
+                  <select id="cfg-audio"></select>
+                </label>
+
+                <label class="switch-row">
+                  <span>Enable OpenRGB</span>
+                  <input type="checkbox" id="cfg-openrgb" class="switch" />
+                </label>
+
+                <div class="field-grid">
+                  <label class="field">
+                    <span>Host</span>
+                    <input type="text" id="cfg-host" spellcheck="false" />
+                  </label>
+                  <label class="field narrow">
+                    <span>Port</span>
+                    <input type="text" id="cfg-openrgb-port" inputmode="numeric" spellcheck="false" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h3>Hotkeys</h3>
+                <div class="field-grid two">
+                  <label class="field"><span>Toggle beat</span><input type="text" id="cfg-tecla-batida" spellcheck="false" /></label>
+                  <label class="field"><span>Play / pause</span><input type="text" id="cfg-tecla-play" spellcheck="false" /></label>
+                  <label class="field"><span>Next track</span><input type="text" id="cfg-tecla-prox" spellcheck="false" /></label>
+                  <label class="field"><span>Previous track</span><input type="text" id="cfg-tecla-ant" spellcheck="false" /></label>
+                </div>
+              </section>
+            </div>
+
+            <div class="settings-col">
+              <section class="settings-section">
+                <h3>Color</h3>
+                <label class="slider-field">
+                  <span>Brightness when paused <b id="val-pausa">0.15</b></span>
+                  <input type="range" id="cfg-pausa" min="0" max="1" step="0.01" />
+                </label>
+                <label class="slider-field">
+                  <span>Color fade (seconds) <b id="val-suavidade">0.12</b></span>
+                  <input type="range" id="cfg-suavidade" min="0.02" max="1" step="0.01" />
+                </label>
+                <label class="slider-field">
+                  <span>Color gamma <b id="val-gamma">2.2</b></span>
+                  <input type="range" id="cfg-gamma" min="1" max="3.5" step="0.05" />
+                </label>
+              </section>
+
+              <section class="settings-section">
+                <h3>Beat</h3>
+                <label class="slider-field">
+                  <span>Sensitivity <b id="val-sens">1.2</b></span>
+                  <input type="range" id="cfg-sens" min="0.8" max="3" step="0.05" />
+                </label>
+                <label class="slider-field">
+                  <span>Minimum brightness <b id="val-batida-min">0.25</b></span>
+                  <input type="range" id="cfg-batida-min" min="0" max="1" step="0.01" />
+                </label>
+                <label class="slider-field">
+                  <span>Flash decay (seconds) <b id="val-decaimento">0.12</b></span>
+                  <input type="range" id="cfg-decaimento" min="0.05" max="0.6" step="0.01" />
+                </label>
+              </section>
+
+              <section class="settings-section">
+                <h3>Window</h3>
+                <label class="switch-row"><span>Start minimized to tray</span><input type="checkbox" id="cfg-start-min" class="switch" /></label>
+                <label class="switch-row"><span>Close button hides to tray</span><input type="checkbox" id="cfg-close-tray" class="switch" /></label>
+                <label class="switch-row"><span>Beat enabled at startup</span><input type="checkbox" id="cfg-beat-start" class="switch" /></label>
+              </section>
+            </div>
+          </div>
+
+          <div class="settings-foot">
+            <button class="btn danger-ghost" id="settings-reset">Reset</button>
+            <div class="spacer"></div>
+            <button class="btn ghost" id="settings-cancel">Cancel</button>
+            <button class="btn primary" id="settings-save">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="toast hidden" id="toast"></div>
+
+      <div class="boot" id="boot">
+        <img src="assets/icon.png" alt="" class="boot-logo" />
+        <div class="boot-title">Starting HueBeat</div>
+        <div class="boot-sub" id="boot-sub">Connecting to the audio engine…</div>
+        <div class="boot-spinner"></div>
+      </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
