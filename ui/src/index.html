@@ -106,6 +106,24 @@
                 <span class="beat-state" id="beat-state">ON</span>
               </button>
             </div>
+
+            <div class="volume" id="volume">
+              <div class="volume-head">
+                <span class="volume-label">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z" />
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                    <path d="M18.5 6a9 9 0 0 1 0 12" />
+                  </svg>
+                  Player volume
+                </span>
+                <span class="vol-app" id="vol-app">No active player</span>
+              </div>
+              <div class="volume-row">
+                <input type="range" id="vol" min="0" max="100" step="1" value="100" aria-label="Player volume" />
+                <span class="vol-value" id="vol-value">100%</span>
+              </div>
+            </div>
           </div>
 
           <div class="card eq-card">

@@ -1,4 +1,4 @@
-# Builds the HueBeat Tauri app: Python sidecar + Rust shell + web UI.
+# Builds the HueBeat Tauri app (native Rust engine + web UI).
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -6,13 +6,6 @@ $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
 
 Push-Location $root
 try {
-    Write-Host "==> Building the Python sidecar"
-    python -m PyInstaller --noconfirm --clean `
-        --distpath "$root\ui\src-tauri\binaries" `
-        --workpath "$root\build_backend" `
-        "$root\HueBeatBackend.spec"
-    if ($LASTEXITCODE -ne 0) { throw "sidecar build failed" }
-
     Push-Location "$root\ui"
     try {
         Write-Host "==> Installing UI dependencies"

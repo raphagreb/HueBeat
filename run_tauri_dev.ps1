@@ -1,4 +1,4 @@
-# Development mode: runs the Tauri shell, which starts backend_sidecar.py.
+# Development mode: runs the Tauri shell with the native Rust engine.
 $ErrorActionPreference = "Stop"
 
 $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"

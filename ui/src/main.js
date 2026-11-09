@@ -32,6 +32,8 @@ let settingsOpen = false;
 let resetArmed = false;
 let resetTimer = 0;
 let toastTimer = 0;
+let volDragging = false;
+let volHoldUntil = 0;
 
 const spectrumTarget = new Float32Array(64);
 const spectrumCur = new Float32Array(64);
@@ -179,6 +181,18 @@ function applyState(msg) {
     beat.className = `stat-value ${msg.batida_ativa ? "ok" : "off"}`;
   }
 
+  // player volume
+  if ("vol" in msg) {
+    if (
+      !volDragging &&
+      performance.now() >= volHoldUntil &&
+      document.activeElement !== $("vol")
+    ) {
+      setVolumeUi(msg.vol);
+    }
+    $("vol-app").textContent = msg.vol_app || "No active player";
+  }
+
   if (spec.length) $("eq-badge").textContent = `${spec.length} bands`;
 }
 
@@ -313,6 +327,14 @@ function syncRange(input, label, digits) {
   if (out) out.textContent = value.toFixed(digits);
 }
 
+function setVolumeUi(value) {
+  const input = $("vol");
+  const clamped = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  input.value = String(clamped);
+  input.style.setProperty("--p", `${clamped}%`);
+  $("vol-value").textContent = `${clamped}%`;
+}
+
 function renderSettings(data) {
   const values = data.values || {};
 
@@ -426,6 +448,26 @@ function wireUi() {
     const input = $(inputId);
     input.addEventListener("input", () => syncRange(input, labelId, digits));
   }
+
+  // player volume (per-app WASAPI session)
+  const volume = $("vol");
+  setVolumeUi(volume.value);
+  volume.addEventListener("input", () => {
+    const value = Number(volume.value);
+    setVolumeUi(value);
+    volHoldUntil = performance.now() + 900;
+    send({ cmd: "volume", value });
+  });
+  volume.addEventListener("pointerdown", () => {
+    volDragging = true;
+  });
+  const releaseVolume = () => {
+    volDragging = false;
+    volHoldUntil = performance.now() + 900;
+  };
+  volume.addEventListener("pointerup", releaseVolume);
+  volume.addEventListener("pointercancel", releaseVolume);
+  volume.addEventListener("change", releaseVolume);
 
   // seek
   const progress = $("progress");

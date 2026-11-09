@@ -1,19 +1,16 @@
+mod engine;
+mod hotkeys;
+
 use serde_json::Value;
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri_plugin_global_shortcut::ShortcutState;
 
-/// Handle to the headless Python backend (newline-delimited JSON on stdio).
-struct Backend {
-    stdin: Mutex<Option<ChildStdin>>,
-    child: Mutex<Option<Child>>,
-}
+use engine::{ControlMsg, Engine, HotkeyAction};
 
 struct UiState {
     start_minimized: AtomicBool,
@@ -36,103 +33,9 @@ fn setting_bool(key: &str, default: bool) -> bool {
     json.get(key).and_then(Value::as_bool).unwrap_or(default)
 }
 
-fn log_path() -> PathBuf {
-    settings_path()
-        .and_then(|p| p.parent().map(|d| d.join("backend.log")))
-        .unwrap_or_else(|| PathBuf::from("huebeat-backend.log"))
-}
-
-fn backend_command(app: &AppHandle) -> Command {
-    if let Ok(explicit) = std::env::var("HUEBEAT_BACKEND") {
-        return Command::new(explicit);
-    }
-
-    if let Ok(dir) = app.path().resource_dir() {
-        let exe = dir.join("huebeat-backend.exe");
-        if exe.exists() {
-            return Command::new(exe);
-        }
-    }
-
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let sidecar = dir.join("huebeat-backend.exe");
-            if sidecar.exists() {
-                return Command::new(sidecar);
-            }
-        }
-    }
-
-    // Development fallback: run the Python source next to the ui/ folder.
-    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("backend_sidecar.py");
-    let mut cmd = Command::new("python");
-    cmd.arg("-u").arg(script);
-    cmd
-}
-
-fn spawn_backend(app: &AppHandle) -> Result<Backend, String> {
-    let mut cmd = backend_command(app);
-    cmd.stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-
-    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-    let stdin = child.stdin.take();
-    let stdout = child.stdout.take().ok_or("backend has no stdout")?;
-    let stderr = child.stderr.take().ok_or("backend has no stderr")?;
-
-    let app_out = app.clone();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines() {
-            match line {
-                Ok(text) => {
-                    let _ = app_out.emit("backend-line", text);
-                }
-                Err(_) => break,
-            }
-        }
-        let _ = app_out.emit("backend-closed", ());
-    });
-
-    let log = log_path();
-    // Keep the log from growing forever across sessions.
-    if let Ok(meta) = std::fs::metadata(&log) {
-        if meta.len() > 4 * 1024 * 1024 {
-            let _ = std::fs::remove_file(&log);
-        }
-    }
-    std::thread::spawn(move || {
-        let mut file = OpenOptions::new().create(true).append(true).open(log).ok();
-        for line in BufReader::new(stderr).lines().flatten() {
-            if let Some(f) = file.as_mut() {
-                let _ = writeln!(f, "{line}");
-            }
-        }
-    });
-
-    Ok(Backend {
-        stdin: Mutex::new(stdin),
-        child: Mutex::new(Some(child)),
-    })
-}
-
 fn backend_write(app: &AppHandle, value: Value) {
-    let Some(state) = app.try_state::<Backend>() else {
-        return;
-    };
-    let Ok(mut guard) = state.stdin.lock() else {
-        return;
-    };
-    if let Some(stdin) = guard.as_mut() {
-        let _ = writeln!(stdin, "{value}");
-        let _ = stdin.flush();
+    if let Some(engine) = app.try_state::<Arc<Engine>>() {
+        engine.handle_line(&value.to_string());
     }
 }
 
@@ -144,21 +47,25 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+/// Sends one command line to the engine.
 #[tauri::command]
-fn backend_send(state: State<'_, Backend>, line: String) -> Result<(), String> {
+fn backend_send(engine: State<'_, Arc<Engine>>, line: String) -> Result<(), String> {
     let _: Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-    let mut guard = state.stdin.lock().map_err(|_| "backend lock poisoned")?;
-    let stdin = guard.as_mut().ok_or("backend is not running")?;
-    writeln!(stdin, "{line}").map_err(|e| e.to_string())?;
-    stdin.flush().map_err(|e| e.to_string())
+    engine.handle_line(&line);
+    Ok(())
 }
 
 #[tauri::command]
-fn ui_ready(window: tauri::WebviewWindow, state: State<'_, UiState>) {
+fn ui_ready(
+    window: tauri::WebviewWindow,
+    state: State<'_, UiState>,
+    engine: State<'_, Arc<Engine>>,
+) {
     if !state.start_minimized.load(Ordering::Relaxed) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+    engine.announce();
 }
 
 #[tauri::command]
@@ -195,6 +102,24 @@ fn app_quit(app: AppHandle) {
     app.exit(0);
 }
 
+fn handle_shortcut(app: &AppHandle, shortcut: &tauri_plugin_global_shortcut::Shortcut) {
+    let Some(engine) = app.try_state::<Arc<Engine>>() else {
+        return;
+    };
+    let action = engine.hotkeys.lock().ok().and_then(|map| {
+        map.iter()
+            .find(|(id, _)| *id == shortcut.id())
+            .map(|(_, action)| *action)
+    });
+    match action {
+        Some(HotkeyAction::Beat) => engine.toggle_beat.store(true, Ordering::Relaxed),
+        Some(HotkeyAction::PlayPause) => engine.send_control(ControlMsg::PlayPause),
+        Some(HotkeyAction::Next) => engine.send_control(ControlMsg::Next),
+        Some(HotkeyAction::Previous) => engine.send_control(ControlMsg::Previous),
+        None => {}
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let start_minimized = setting_bool("iniciar_minimizado", false);
@@ -204,6 +129,15 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_main(app);
         }))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        handle_shortcut(app, shortcut);
+                    }
+                })
+                .build(),
+        )
         .manage(UiState {
             start_minimized: AtomicBool::new(start_minimized),
             close_to_tray: AtomicBool::new(close_to_tray),
@@ -220,24 +154,16 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-
-            match spawn_backend(&handle) {
-                Ok(backend) => {
-                    app.manage(backend);
-                }
-                Err(err) => {
-                    eprintln!("could not start backend: {err}");
-                    let _ = handle.emit("backend-error", err);
-                }
-            }
+            let engine = engine::start(handle.clone());
+            hotkeys::reload(&engine, &handle);
+            app.manage(engine);
 
             // Safety net: if the webview never calls ui_ready (JS error), still
             // show the window so the problem is visible instead of silent.
             let guard = app.handle().clone();
-            let start_min = start_minimized;
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(4));
-                if start_min {
+                if start_minimized {
                     return;
                 }
                 if let Some(window) = guard.get_webview_window("main") {
@@ -327,15 +253,5 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building HueBeat");
 
-    app.run(|app_handle, event| {
-        if let tauri::RunEvent::Exit = event {
-            if let Some(state) = app_handle.try_state::<Backend>() {
-                if let Ok(mut guard) = state.child.lock() {
-                    if let Some(child) = guard.as_mut() {
-                        let _ = child.kill();
-                    }
-                }
-            }
-        }
-    });
+    app.run(|_, _| {});
 }

@@ -1,1 +1,29 @@
-dist/
+# Installers and local build output
+/dist/
+/build/
+/build_backend/
+
+# Python artifacts (legacy helper scripts)
+__pycache__/
+*.py[cod]
+*.spec
+.venv/
+venv/
+
+# Rust / Tauri build output
+/ui/src-tauri/target/
+/ui/src-tauri/gen/schemas/
+
+# Node dependencies
+/ui/node_modules/
+
+# Logs
+*.log
+logs/
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

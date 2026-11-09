@@ -44,9 +44,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": {
-      "binaries/huebeat-backend.exe": "huebeat-backend.exe"
-    },
     "windows": {
       "nsis": {
         "installMode": "currentUser"
